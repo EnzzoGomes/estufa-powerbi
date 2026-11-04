@@ -2,7 +2,8 @@ name: Enviar para o Power BI
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # a cada 15 min (o GitHub pode atrasar alguns minutos)
+    # Minutos "quebrados": no início de cada hora o GitHub fica sobrecarregado e costuma pular execuções.
+    - cron: "7,22,37,52 * * * *"   # a cada 15 min (o GitHub pode atrasar ou pular algumas)
   workflow_dispatch:          # botão "Run workflow" para rodar na hora
 
 permissions:
