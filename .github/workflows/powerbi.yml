@@ -1,9 +1,11 @@
 name: Enviar para o Power BI
 
+# O agendamento grátis do GitHub atrasa e pula muitas execuções. Por isso cada execução
+# fica ligada por até ~5h30, enviando a cada 15 min. O agendamento de hora em hora só serve
+# para religar: enquanto uma execução roda, a próxima fica na fila e começa quando ela terminar.
 on:
   schedule:
-    # Minutos "quebrados": no início de cada hora o GitHub fica sobrecarregado e costuma pular execuções.
-    - cron: "7,22,37,52 * * * *"   # a cada 15 min (o GitHub pode atrasar ou pular algumas)
+    - cron: "7 * * * *"
   workflow_dispatch:          # botão "Run workflow" para rodar na hora
 
 permissions:
@@ -16,22 +18,24 @@ concurrency:
 jobs:
   enviar:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@v4
 
-      - name: Enviar médias de 15 min
+      - name: Enviar médias de 15 min (a cada 15 min, por até ~5h30)
         env:
           POWERBI_PUSH_URL: ${{ secrets.POWERBI_PUSH_URL }}
-        run: python3 enviar_powerbi.py
-
-      - name: Salvar até onde foi enviado
-        if: always()
         run: |
-          if [ -n "$(git status --porcelain ultimo_envio.txt)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add ultimo_envio.txt
-            git commit -m "Power BI: enviado até $(cat ultimo_envio.txt)"
-            git push
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fim=$(( $(date +%s) + 330 * 60 ))
+          while :; do
+            python3 enviar_powerbi.py || echo "Envio falhou; tenta de novo em 15 min."
+            if [ -n "$(git status --porcelain ultimo_envio.txt)" ]; then
+              git add ultimo_envio.txt
+              git commit -q -m "Power BI: enviado até $(cat ultimo_envio.txt)"
+              git push -q || { git pull -q --rebase && git push -q; } || echo "Não salvou o progresso agora; salva na próxima."
+            fi
+            [ "$(date +%s)" -ge "$fim" ] && break
+            sleep 900
+          done
